@@ -5,19 +5,20 @@ import queue
 import yaml
 import bladerf
 from lib.bladeandnumpy import BladeRFAndNumpy
-from lib.general import *
 import lib.bsocket as bsocket
 import random
+import numpy as np
+import time
 
 def secondary(serial, config_path):
     with open(config_path, 'r') as fd:
         cfg = yaml.unsafe_load(fd)
-    cfg = cfg['secondary'][serial]
+    cfg = cfg['servers'][serial]
 
     dev = BladeRFAndNumpy(f'libusb:serial={serial}')
 
     num_buffers = 16
-    buffer_size = 1024 * 32
+    buffer_size = 1024 * 8
     buffer_samps = num_buffers * buffer_size
 
     dev.sync_config(
@@ -48,7 +49,7 @@ def secondary(serial, config_path):
     )
     core_th.start()
 
-    rx_thread(dev, rx_data_q, num_buffers, buffer_size)
+    rx_thread(cfg, dev, rx_data_q, num_buffers, buffer_size)
 
 def core(msock, dev, rx_data_q):
     while True:
@@ -73,6 +74,7 @@ def _inner(sock, dev, rx_data_q):
         bsocket.send_pickle(sock, ret)
 
 def rx_thread(
+        cfg,
         dev: BladeRFAndNumpy,
         rx_data_q,
         num_buffers,
@@ -94,11 +96,11 @@ def rx_thread(
     samp_count = 25000
 
     while True:
-        freq = random.randint(int(70e6), int(6e9))
+        freq = random.randint(
+            int(float(cfg['freq-min'])), 
+            int(float(cfg['freq-max']))
+        )
         dev.set_frequency(0, freq)
-        # dev.set_frequency(2, freq)
-        #print('@', dev.get_frequency(2), freq)
-        #assert dev.get_frequency(2) == freq
         dev.sample_as_f64(buffer_samps, 2, 4, 0)
         b0, b1 = dev.sample_as_f64(samp_count, 2, 4, 0)
         b0 = np.mean(np.abs(b0))

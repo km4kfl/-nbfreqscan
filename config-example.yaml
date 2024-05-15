@@ -1,0 +1,25 @@
+servers:
+  9da:
+    enabled: true
+    host: 192.168.0.105
+    port: 10000
+    freq-min: 70e6
+    freq-max: 6e9
+  5bb:
+    enabled: true
+    host: 192.168.0.105
+    port: 10001
+    freq-min: 70e6
+    freq-max: 6e9    
+  8bb:
+    enabled: true
+    host: 192.168.0.100
+    port: 10002
+    freq-min: 70e6
+    freq-max: 6e9    
+  e85:
+    enabled: true
+    host: 192.168.0.100
+    port: 10003
+    freq-min: 70e6
+    freq-max: 6e9    

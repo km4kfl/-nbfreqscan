@@ -17,7 +17,7 @@ def execute(config_path: str):
     with open(config_path, 'r') as fd:
         cfg = yaml.unsafe_load(fd)
     
-    sec = cfg['secondary']
+    sec = cfg['servers']
 
     socks = []
     socks_ndx = []

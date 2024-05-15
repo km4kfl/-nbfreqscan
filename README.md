@@ -7,23 +7,31 @@ The configuration file is used by both the server to know which port it should l
 
 # Example Configuration
 ```
-secondary:
+servers:
   9da:
     enabled: true
     host: 192.168.0.105
     port: 10000
+    freq-min: 70e6
+    freq-max: 6e9
   5bb:
     enabled: true
     host: 192.168.0.105
     port: 10001
+    freq-min: 70e6
+    freq-max: 6e9    
   8bb:
     enabled: true
     host: 192.168.0.100
     port: 10002
+    freq-min: 70e6
+    freq-max: 6e9    
   e85:
     enabled: true
     host: 192.168.0.100
     port: 10003
+    freq-min: 70e6
+    freq-max: 6e9
 ```
 
 The `9da`, `5bb`, `8bb`, and `e85` are the first three digits of the serial numbers for the four BladeRF cards used in the example configuration. The host and port are used by the server to bind a network socket and are used by the client to connect.
