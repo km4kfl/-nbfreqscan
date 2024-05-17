@@ -5,6 +5,25 @@ The scanner is in three parts. The first is a server program, `freqscanserver.py
 
 The configuration file is used by both the server to know which port it should listen on and by the client to know what system to connect to.
 
+# Command Line Parameters
+
+## Server (freqscanserver.py)
+
+The samples per second (`--sps`) can now be specified at the command line. If one wants to channelize
+the baseband then the argument `--channel-bw` can be used. Be aware that unless `--bw` is specified it
+will default to 200e3-hertz which would be unexpected in many cases.
+
+## Client (freqscanclient.py)
+
+The client takes `--config` and `--output`. The `--output` is a simple Python pickle based output file
+for the data.
+
+## S3 Client (s3shuffle.py)
+
+This extends `freqscanclient.py` within the code by using an Amazon S3 bucket to store the output
+and an adapter called `view_fetch.py` is included to pull this data and recreate the local file
+if desired. Instead of running `freqscanclient.py` one runs `s3shuffle.py` in it's place.
+
 # Example Configuration
 ```
 servers:
@@ -34,4 +53,9 @@ servers:
     freq-max: 6e9
 ```
 
-The `9da`, `5bb`, `8bb`, and `e85` are the first three digits of the serial numbers for the four BladeRF cards used in the example configuration. The host and port are used by the server to bind a network socket and are used by the client to connect.
+The `9da`, `5bb`, `8bb`, and `e85` are the first three digits of the serial numbers for the four BladeRF cards used in the example configuration. The host and port are used by the server to bind a network socket and are used by the client to connect. 
+
+You can use whatever number of digits/letters the BladeRF library supports for specifying cards. This is used with `libusb:serial=<digits/letters>` when opening the device. You can use `bladeRF-cli -p` to probe for the card's serials and `bladeRF-cli -d libusb:serial=<serial>` to test the serial. If it works with `bladeRF-cli` then it will work in the config file.
+
+You can use the host address `0.0.0.0` but then the client won't know what address to connect with
+unless you use a seperate configuration file for the client.
