@@ -16,12 +16,14 @@ import lib.bsocket as bsocket
 import random
 import numpy as np
 import time
+import scipy.signal as signal
 
 def secondary(
     serial: str,
     config_path: str,
     sps: int,
-    bw: float) -> None:
+    bw: float,
+    args: any) -> None:
     """The main entry function.
 
     This is called after arguments are parsed.
@@ -71,7 +73,8 @@ def secondary(
         num_buffers,
         buffer_size,
         sps,
-        bw
+        bw,
+        args
     )
 
 def core(msock, dev, rx_data_q):
@@ -112,8 +115,9 @@ def rx_thread(
         num_buffers: int,
         buffer_size: int,
         sps: int,
-        bw: float):
-    """Recieves samples from the device and queues the output.
+        bw: float,
+        args: any):
+    """Receives samples from the device and queues the output.
 
     This function tunes the device, sets configurations, queries
     for samples, computes the output, and places the output in
@@ -137,6 +141,14 @@ def rx_thread(
 
     samp_count = 25000
 
+    if args.channel_bw is not None:
+        slide_cnt = int(sps / args.channel_bw)
+        t = samp_count / sps
+        shifter = np.exp(1j * np.linspace(
+            0, np.pi * 2 * -args.channel_bw * t, samp_count
+        ))
+        shifter_filter = signal.butter(8, args.channel_bw, btype='low', output='sos', fs=sps)
+
     while True:
         freq = random.randint(
             int(float(cfg['freq-min'])), 
@@ -147,6 +159,26 @@ def rx_thread(
         b0, b1 = dev.sample_as_f64(samp_count, 2, 4, 0)
         b0 = np.mean(np.abs(b0))
         b1 = np.mean(np.abs(b1))
+
+        if args.channel_bw is not None:
+            cout = []
+            b0b = b0.copy()
+            b1b = b1.copy()
+            for slide_ndx in range(slide_cnt):
+                b0b *= shifter
+                b1b *= shifter
+                cur_center = slide_ndx * args.channel_bw
+                if cur_center > sps * 0.5:
+                    cur_center = -(sps * 0.5) + (cur_center - sps * 0.5)
+                b0bf = np.mean(np.abs(signal.sosfilt(shifter_filter, b0b)))
+                b1bf = np.mean(np.abs(signal.sosfilt(shifter_filter, b1b)))
+                cout.append({
+                    'freq': cur_center,
+                    'b0': b0bf,
+                    'b1': b1bf,
+                })
+        else:
+            cout = None
 
         while rx_data_q.qsize() > 100:
             time.sleep(0)
@@ -159,6 +191,7 @@ def rx_thread(
             'b1': b1, 
             'bw': bw,
             'sps': sps,
+            'channel': cout,
         })
 
 if __name__ == '__main__':
@@ -169,5 +202,7 @@ if __name__ == '__main__':
     ap.add_argument('--sps', type=int, default=int(1e6), help=sps_help)
     bw_help = 'This controls the width of the chunks the baseband is broken down into as each of these are a sample. If no value is specified then the bandwidth is equal to 200e3.'
     ap.add_argument('--bw', type=float, default=None, help=bw_help)
+    cbw_help = 'This controls the channel bandwidth. If specified the baseband is broken down into channels.'
+    ap.add_argument('--channel-bw', type=float, default=None, help=cbw_help)
     args = ap.parse_args()
-    secondary(args.serial, args.config, args.sps, args.bw)
+    secondary(args.serial, args.config, args.sps, args.bw, args)
