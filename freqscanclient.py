@@ -67,7 +67,7 @@ def main(config_path: str, data_output_path: str):
         mt, freq = data['time'], data['freq']
         b0, b1 = data['b0'], data['b1']
         pickle.dump((
-            mt, freq, b0, source_ndx
+            mt, freq, b0, b1, source_ndx
         ), fd)
         fd.flush()
         print(mt, freq, b0, b1, source_ndx)
