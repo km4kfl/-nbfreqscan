@@ -18,6 +18,10 @@ import time
 import uuid
 import pickle
 import boto3
+import os.path
+import os
+import queue
+import threading
 
 def get_boto3_s3_client(region='us-east-2'):
     with open('s3sak.txt', 'r') as fd:
@@ -42,13 +46,30 @@ def main():
 
     source = freqscanclient.execute('config.yaml')
 
+    q = queue.Queue()
+
+    upload_worker_th = threading.Thread(
+        target=upload_worker,
+        args=(s3c, q),
+        daemon=True
+    )
+
+    disk_worker_th = threading.Thread(
+        target=disk_worker,
+        args=(s3c,),
+        daemon=True
+    )
+
+    upload_worker_th.start()
+    disk_worker_th.start()
+
     while True:
         pkg = io.BytesIO()
 
         newest = None
         oldest = None
 
-        print('building package')
+        print('building package', time.time())
         for data, src_ndx in source:
             ts = data['time']
 
@@ -62,17 +83,55 @@ def main():
                 'src_ndx': src_ndx,
             }, pkg)
 
-            print('pkgadd', data)
-
             if pkg.tell() > 1024 * 1024 * 4:
                 break
         
-        print('uploading package')
+        print('package ready', time.time())
+        
+        # Save the buffer in the event it is needed because
+        # s3c calls close on the BytesIO object rendering
+        # it unsable.
+        buf = pkg.getvalue()
+        
         pkg.seek(0)
         ct = time.time()
         uid = uuid.uuid4().hex
         pkg_key = f'{uid}-{ct}-{oldest}-{newest}'
-        s3c.upload_fileobj(pkg, 'radio248', pkg_key)
+
+        q.put((pkg_key, pkg))
+
+def upload_worker(s3c, q):
+    while True:
+        pkg_key, pkg = q.get()
+        buf = pkg.getvalue()
+        try:
+            print('[UP] uploading', pkg_key)
+            s3c.upload_fileobj(pkg, 'radio248', pkg_key)
+            print('[UP] upload successful')
+        except Exception as e:
+            print(e)
+            print('[UP] dumped to disk', e)
+            with open('s3.' + pkg_key, 'wb') as fd:
+                fd.write(buf)
+
+def disk_worker(s3c):
+    while True:
+        for node in os.listdir('.'):
+            if not node.startswith('s3.'):
+                continue
+
+            pkg_key = node[3:]
+            
+            try:
+                print('[DISK] uploading', node)
+                with open(node, 'rb') as fd:
+                    s3c.upload_fileobj(fd, 'radio248', pkg_key)
+                os.remove(node)          
+            except Exception as e:
+                print('[DISK]', e)
+        
+        print('[DISK] sleeping')
+        time.sleep(30)
 
 if __name__ == '__main__':
     main()
