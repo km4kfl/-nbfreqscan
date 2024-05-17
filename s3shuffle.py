@@ -24,6 +24,9 @@ import queue
 import threading
 
 def get_boto3_s3_client(region='us-east-2'):
+    """Get a Boto3 S3 client using the local credential
+    file s3sak.txt and return it.
+    """
     with open('s3sak.txt', 'r') as fd:
         lines = list(fd.readlines())
         access_key = lines[0].strip()
@@ -42,6 +45,8 @@ def get_boto3_s3_client(region='us-east-2'):
 
 
 def main():
+    """The main entry point for the program if run standalone.
+    """
     s3c = get_boto3_s3_client()
 
     source = freqscanclient.execute('config.yaml')
@@ -101,6 +106,12 @@ def main():
         q.put((pkg_key, pkg))
 
 def upload_worker(s3c, q):
+    """Upload items from queue to Amazon S3.
+
+    The main thread sends item via the queue, these
+    are uploaded, and if the upload fails for any
+    reason the package is written out to disk.
+    """
     while True:
         pkg_key, pkg = q.get()
         buf = pkg.getvalue()
@@ -115,6 +126,13 @@ def upload_worker(s3c, q):
                 fd.write(buf)
 
 def disk_worker(s3c):
+    """Upload items from disk to Amazon S3.
+
+    Scan the disk on interval and locate S3 package
+    that failed to upload the first time. Try to
+    upload each package and on success delete the
+    disk file.
+    """
     while True:
         for node in os.listdir('.'):
             if not node.startswith('s3.'):
