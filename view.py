@@ -13,7 +13,11 @@ c = {}
 with open('plot', 'rb') as fd:
     while True:
         try:
-            mt, freq, b0, b1, board_ndx = pickle.load(fd)
+            entry = pickle.load(fd)
+            if len(entry) != 5:
+                print('bad entry', entry)
+                continue
+            mt, freq, b0, b1, board_ndx = entry
         except EOFError:
             break
         board_ndx = str(board_ndx)
@@ -133,8 +137,8 @@ f = np.array(f)
 time_of_day_analysis(f[:, 0], f[:, 1], f[:, 2])
 '''
 
-bins = 128
-time_period_hours = 0.5
+bins = 4096
+time_period_hours = 1
 time_period = int(60 * 60 * time_period_hours)
 
 # earliest start time
