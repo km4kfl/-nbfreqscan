@@ -24,6 +24,10 @@ This extends `freqscanclient.py` within the code by using an Amazon S3 bucket to
 and an adapter called `view_fetch.py` is included to pull this data and recreate the local file
 if desired. Instead of running `freqscanclient.py` one runs `s3shuffle.py` in it's place.
 
+### Dependencies
+
+You need to execute `python3 -m pip install boto3` to get the Amazon client library ready.
+
 # Example Configuration
 ```
 servers:
