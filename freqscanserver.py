@@ -105,7 +105,7 @@ def _inner(sock, dev, rx_data_q):
     """
     while True:
         ret = rx_data_q.get()
-        print('sending', ret)
+        print('sending')
         bsocket.send_pickle(sock, ret)
 
 def rx_thread(
@@ -157,16 +157,15 @@ def rx_thread(
         dev.set_frequency(0, freq)
         dev.sample_as_f64(buffer_samps, 2, 4, 0)
         b0, b1 = dev.sample_as_f64(samp_count, 2, 4, 0)
-        b0 = np.mean(np.abs(b0))
-        b1 = np.mean(np.abs(b1))
+        b0m = np.mean(np.abs(b0))
+        b1m = np.mean(np.abs(b1))
 
         if args.channel_bw is not None:
+            dbg = []
             cout = []
             b0b = b0.copy()
             b1b = b1.copy()
             for slide_ndx in range(slide_cnt):
-                b0b *= shifter
-                b1b *= shifter
                 cur_center = slide_ndx * args.channel_bw
                 if cur_center > sps * 0.5:
                     cur_center = -(sps * 0.5) + (cur_center - sps * 0.5)
@@ -177,18 +176,20 @@ def rx_thread(
                     'b0': b0bf,
                     'b1': b1bf,
                 })
+                b0b *= shifter
+                b1b *= shifter                
         else:
             cout = None
 
         while rx_data_q.qsize() > 100:
             time.sleep(0)
 
-        print('loaded', freq, b0, b1)
+        print('loaded', freq, b0m, b1m)
         rx_data_q.put({
             'time': time.time(),
             'freq': freq, 
-            'b0': b0, 
-            'b1': b1, 
+            'b0': b0m, 
+            'b1': b1m, 
             'bw': bw,
             'sps': sps,
             'channel': cout,
