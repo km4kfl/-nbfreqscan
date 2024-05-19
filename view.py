@@ -10,6 +10,15 @@ a = {}
 b = {}
 c = {}
 
+with open('z:\\nbfreqscan\\ism_ant_graph.pickle', 'rb') as fd:
+    graph = pickle.load(fd)
+
+a['apple'] = []
+b['apple'] = []
+c['apple'] = []
+
+ct = time.time()
+
 with open('plot', 'rb') as fd:
     while True:
         try:
@@ -20,6 +29,22 @@ with open('plot', 'rb') as fd:
             mt, freq, b0, b1, board_ndx = entry
         except EOFError:
             break
+
+        #if ct - mt > 60 * 60 * 24:
+        #    continue
+
+        #if board_ndx != 0:
+        #    continue
+
+        b0 = b1
+
+        b0 /= np.interp(freq / 1e9, graph[0], graph[1])
+
+        a['apple'].append(freq)
+        b['apple'].append(b0)
+        c['apple'].append(mt)
+
+        '''
         board_ndx = str(board_ndx)
         if board_ndx + '.0' not in a:
             a[board_ndx + '.0'] = []
@@ -34,10 +59,15 @@ with open('plot', 'rb') as fd:
         b[board_ndx + '.1'].append(b1)
         c[board_ndx + '.0'].append(mt)
         c[board_ndx + '.1'].append(mt)
-
+        '''
+        
 print('data loaded')
 
-print('sample count', len(a['0.0']))
+#plt.plot(b['apple'])
+#plt.show()
+#exit()
+
+print('sample count')
 
 def time_of_day_analysis(
     start_time,
@@ -137,7 +167,7 @@ f = np.array(f)
 time_of_day_analysis(f[:, 0], f[:, 1], f[:, 2])
 '''
 
-bins = 4096
+bins = 256
 time_period_hours = 1
 time_period = int(60 * 60 * time_period_hours)
 
@@ -154,7 +184,17 @@ sigma_c = 0.0
 rows = 0
 for k in c:
     print('time of day analysis', k)
-    s = time_of_day_analysis(est, time_period, bins, c[k], a[k], b[k])
+
+    t = []
+    for x in range(len(c[k])):
+        t.append((c[k][x], a[k][x], b[k][x]))
+
+    # Just to be safe. Sort it.
+    t.sort(key=lambda item: item[0])
+
+    t = np.array(t)
+
+    s = time_of_day_analysis(est, time_period, bins, t[:, 0], t[:, 1], t[:, 2])
     sigma_l.append(s)
     if s.shape[0] > rows:
         rows = s.shape[0]
@@ -182,27 +222,32 @@ plt.title('%.2f Hour Sigma Analysis [%.2f, %.2f]' % (
     time_period_hours,
     tpl[0], tpl[1]
 ))
-
+plt.xlabel('frequency')
+plt.ylabel('time')
 plt.imshow(sigma, extent=[
     70e6, 6e9, 6e9, 70e6
 ], vmin=vmin, vmax=vmax)
 #plt.savefig('sigma-analysis.png')
 plt.show()
-exit()
+#exit()
 
-plt.title('Response at Time')
-plt.xlabel('Time')
-plt.ylabel('Mean Magnitude')
-for data_name in a:
+#plt.title('Response at Time')
+#plt.xlabel('Time')
+#plt.ylabel('Mean Magnitude')
+#for data_name in a:
     #a_dt = [dt.datetime.fromtimestamp(v) for v in a[data_name]]
-    plt.plot(b[data_name], label=data_name)
-plt.legend()
-plt.show()
+#    plt.plot(b[data_name], label=data_name)
+#plt.legend()
+#plt.show()
+
 plt.title('Response At Frequency')
 plt.xlabel('Frequency')
 plt.ylabel('Mean Magnitude')
 for data_name in a:
     plt.scatter(a[data_name], b[data_name], label=data_name, s=0.1)
+    break
+f = np.linspace(70e6, 6e9, 4096) / 1e9
+#plt.scatter(f * 1e9, np.interp(f, graph[0], graph[1]) / 200, label="ant gain")
 plt.legend()
 plt.show()
 
