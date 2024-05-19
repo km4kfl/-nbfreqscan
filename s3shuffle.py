@@ -116,6 +116,8 @@ def upload_worker(s3c, q):
         pkg_key, pkg = q.get()
         buf = pkg.getvalue()
         try:
+            if q.qsize() > 6:
+                raise Exception('queue size is too big forcing disk dump')
             print('[UP] uploading', pkg_key)
             s3c.upload_fileobj(pkg, 'radio248', pkg_key)
             print('[UP] upload successful')
