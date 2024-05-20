@@ -20,15 +20,44 @@ def get_boto3_s3_client(cred_file, region='us-east-2'):
 
     return c
 
-
-def main():
-    s3c = get_boto3_s3_client('z:\\nbfreqscan\\s3sak.txt')
+def main(cred_path: str, bucket_name: str):
+    s3c = get_boto3_s3_client(cred_path)
     print('fetching')
     
-    resp = s3c.list_objects_v2(
-        Bucket='radio248'
-        #StartAfter=key_to_start_listing_after
-    )
+    start_after = None
+
+    s3_online = []
+
+    while True:    
+        print('Fetching S3 index.')
+
+        if start_after is None:
+            resp = s3c.list_objects_v2(
+                Bucket=bucket_name,
+            )
+        else:
+            resp = s3c.list_objects_v2(
+                Bucket=bucket_name,
+                StartAfter=start_after
+            )
+
+        nodes = resp['Contents']
+
+        for node in nodes:
+            key = node['Key']
+            parts = key.split('-')
+            ct = float(parts[1])
+            item = (key, ct)
+            assert item not in s3_online
+            s3_online.append((key, ct))
+
+        if len(nodes) == 1000:
+            print('Fetching remaining items.')
+            start_after = nodes[-1]['Key']
+        else:
+            break
+
+    print(f'Have index of {len(s3_online)} items.')
 
     s3_fetched = set()
 
@@ -39,8 +68,6 @@ def main():
                 s3_fetched.add(line)
     except FileNotFoundError:
         pass
-
-    s3_online = []
 
     for node in resp['Contents']:
         key = node['Key']
@@ -58,7 +85,7 @@ def main():
             data_fd = io.BytesIO()
             
             print('downloading', key)
-            s3c.download_fileobj('radio248', key, data_fd)
+            s3c.download_fileobj(bucket_name, key, data_fd)
             print('appending')
             data_fd.seek(0)
 
@@ -82,4 +109,4 @@ def main():
                 fd.write(f'{key}\n')
 
 if __name__ == '__main__':
-    main()
+    main('z:\\nbfreqscan\\s3sak.txt', 'radio248')
