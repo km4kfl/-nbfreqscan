@@ -22,14 +22,45 @@ def get_boto3_s3_client(cred_file: str, region='us-east-2'):
 
 def main(cred_path: str, bucket_name: str, data_path: str):
     s3c = get_boto3_s3_client(cred_path)
-    
-    resp = s3c.list_objects_v2(
-        Bucket=bucket_name
-        #StartAfter=key_to_start_listing_after
-    )
+
+    start_after = None
+
+    s3_online = []
+
+    while True:    
+        print('Fetching S3 index.')
+
+        if start_after is None:
+            resp = s3c.list_objects_v2(
+                Bucket=bucket_name,
+            )
+        else:
+            resp = s3c.list_objects_v2(
+                Bucket=bucket_name,
+                StartAfter=start_after
+            )
+
+        nodes = resp['Contents']
+
+        for node in nodes:
+            key = node['Key']
+            parts = key.split('-')
+            ct = float(parts[1])
+            item = (key, ct)
+            assert item not in s3_online
+            s3_online.append((key, ct))
+
+        if len(nodes) == 1000:
+            print('Fetching remaining items.')
+            start_after = nodes[-1]['Key']
+        else:
+            break
+
+    print(f'Have index of {len(s3_online)} items.')
 
     s3_fetched = set()
 
+    print('Scanning existing data to build index of downloaded bucket nodes..')
     try:
         with open(data_path, 'rb') as fd:
             try:
@@ -40,14 +71,6 @@ def main(cred_path: str, bucket_name: str, data_path: str):
                 pass
     except FileNotFoundError:
         pass
-
-    s3_online = []
-
-    for node in resp['Contents']:
-        key = node['Key']
-        parts = key.split('-')
-        ct = float(parts[1])
-        s3_online.append((key, ct))
     
     s3_online.sort(key=lambda item: item[1])
 
@@ -59,9 +82,9 @@ def main(cred_path: str, bucket_name: str, data_path: str):
 
             data_fd = io.BytesIO()
             
-            print('downloading', key)
+            print('Downloading.', key)
             s3c.download_fileobj(bucket_name, key, data_fd)
-            print('appending')
+            print('Appending.')
             data_fd.seek(0)
 
             key = key.split('-')
