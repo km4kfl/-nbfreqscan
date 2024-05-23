@@ -95,7 +95,7 @@ def main():
         
         # Save the buffer in the event it is needed because
         # s3c calls close on the BytesIO object rendering
-        # it unsable.
+        # it unusable.
         buf = pkg.getvalue()
         
         pkg.seek(0)
