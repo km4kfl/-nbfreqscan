@@ -1,9 +1,16 @@
+"""Fetches data from S3 bucket and appends to a local file.
+
+This uses an AWS access key to download from an S3 bucket previously
+or currently being filled by `s3shuffle.py`. It stores the data into
+the local file.
+"""
 import pickle
 import boto3
 import pprint
 import io
 import datetime as dt
 import os
+import argparse
 
 def get_boto3_s3_client(cred_file: str, region='us-east-2'):
     with open(cred_file, 'r') as fd:
@@ -133,4 +140,13 @@ def main(cred_path: str, bucket_name: str, data_path: str):
         pickle.dump(s3_fetched, fd)
 
 if __name__ == '__main__':
-    main('z:\\nbfreqscan\\s3sak.txt', 'radio248', 's3radio248.pickle')
+    ap = argparse.ArgumentParser()
+    c_help = 'The path to the credentials. The AWS access key and AWS secret key on seperate lines in text UTF-8 format.'
+    ap.add_argument('--cred-path', type=str, required=True, help=c_help)
+    c_help = 'The S3 bucket name.'
+    ap.add_argument('--bucket-name', type=str, required=True, help=c_help)
+    c_help = 'The path to the local data store file.'
+    ap.add_argument('--data-path', type=str, required=True, help=c_help)
+    #main('z:\\nbfreqscan\\s3sak.txt', 'radio248', 's3radio248.pickle')
+    args = ap.parse_args()
+    main(args.cred_path, args.bucket_name, args.data_path)
