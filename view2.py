@@ -10,6 +10,7 @@ import os
 import argparse
 import threading
 import queue
+import matplotlib.dates as mdates
 
 def enumerate_samples():
     with open('s3radio248.pickle', 'rb') as fd:
@@ -336,7 +337,7 @@ def main(args):
     with open('times.pickle', 'rb') as fd:
         time_period_marks = pickle.load(fd)
 
-    #time_period_marks = mdates.date2nums(time_period_marks)
+    time_period_marks = mdates.date2num(time_period_marks)
 
     fig, ax = plt.subplots()
 
@@ -344,17 +345,30 @@ def main(args):
     ax.set_ylabel('Frequency')
     ax.set_xlabel('Time')
     ax.xaxis_date()
-    ax.imshow(m_energy, aspect='auto', extent=[0, 1, 6e9, 70e6], cmap='rainbow')
+    ax.imshow(m_energy ** args.log, aspect='auto', extent=[time_period_marks[0], time_period_marks[-1], 6e9, 70e6])
     plt.show()
+    plt.close()
 
-    sigma = signal.correlate2d(sigma, [[0, 1, 0], [0, 1, 0]], mode='same')
+    fig, ax = plt.subplots()
+
+    if args.pat_x > 1 or args.pat_y > 1:
+        pat = np.ones(args.pat_x, sigma.dtype)
+        pat = np.tile(pat, args.pat_y).reshape((args.pat_y, args.pat_x))
+        sigma = signal.correlate2d(sigma, pat, mode='same')
 
     plt.title('Sigma')
-    plt.ylabel('Frequency')
-    plt.xlabel('Time')
-    plt.imshow(sigma, extent=[70e6, 6e9, 6e9, 70e6], aspect='auto')
+    ax.set_ylabel('Frequency')
+    ax.set_xlabel('Time')
+    ax.xaxis_date()
+    ax.imshow(
+        sigma ** args.log,
+        extent=[time_period_marks[0], time_period_marks[-1], 6e9, 70e6],
+        aspect='auto'
+    )
     plt.show()
 
+    #plt.plot(sigma[917, :])
+    #plt.show()
 
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(
@@ -367,6 +381,9 @@ if __name__ == '__main__':
     ap.add_argument('--build-mask', action=argparse.BooleanOptionalAction)
     ap.add_argument('--freq-res', type=int, default=4096)
     ap.add_argument('--time-period', type=int, default=3600)
+    ap.add_argument('--log', type=float, default=1.0)
+    ap.add_argument('--pat-x', type=int, default=1)
+    ap.add_argument('--pat-y', type=int, default=1)
     ap.add_argument('--time-period-max-res', type=int, default=4096)
     ap.add_argument('--sigma-pickle', type=str, default='sigma.pickle')
     ap.add_argument('--energy-pickle', type=str, default='m_energy.pickle')
