@@ -88,3 +88,10 @@ The above uses a logarithmic scale of 1.0 (no log scale) for the sigma plot, has
 You can also use `--no-build` to use the cached results where it only runs the module and doesn't build the data. Using `--no-build` ignores most of the parameters as these were used when building the intermediate data (stored in some local files).
 
 If you omit `--start` and `--end` it will build with ALL of the data which may be intended and is quite useful sometimes.
+
+# Performance
+
+You might notice it runs slow. The reason is I'm dealing with a very large dataset that won't fit into RAM nor it will fit using virtual memory. Because of this I have to stream the data in and that causes it to run magnitudes slower. I also stream the data in multiple times which if you are using the whole dataset means it reads the whole data file multiple times - as you can figure for gigabytes of data this can take some time.
+
+There is a faster version for datasets that fit into memory and a much simpler program. I used to have it written but it evolved into what it is now. The process is simple if you need to recreate it just copy what I've done and turn everything into Numpy operations. You can pretty much do it all in almost
+one line of code.
