@@ -145,7 +145,14 @@ def disk_worker(s3c):
             try:
                 print('[DISK] uploading', node)
                 with open(node, 'rb') as fd:
-                    s3c.upload_fileobj(fd, 'radio248', pkg_key)
+                    s3c.upload_fileobj(
+                        fd, 
+                        'radio248', 
+                        pkg_key,
+                        ExtraArgs={
+                            'StorageClass': 'STANDARD',
+                        }
+                    )
                 os.remove(node)          
             except Exception as e:
                 print('[DISK]', e)

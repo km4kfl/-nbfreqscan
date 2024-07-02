@@ -31,55 +31,97 @@ def enumerate_samples():
         except EOFError:
             pass
 
+def build_index(path, indices=None):
+    """Build the index from scratch or use existing index data.
+
+    If using existing index data, through `indices`, then the existing data
+    must have had the new data appended.
+    """
+    print('[building index] %s --> %s' % (path, path + '.index2'))
+    fd = open(path, 'rb')
+    fdx = open(path + '.index2', 'wb')
+
+    msz = fd.seek(0, 2)
+    fd.seek(0)
+
+    if indices is not None:
+        fd.seek(indices[-1][1])
+    else:
+        indices = []
+
+    ilt = time.time()
+
+    while True:
+        if time.time() - ilt > 5:
+            ilt = time.time()
+            per_done = fd.tell() / msz * 100.0
+            print('[building index..] %.2f%%' % per_done)
+        fd_pos = fd.tell()
+        try:
+            key, blob = pickle.load(fd)
+        except EOFError:
+            break
+        ts = key[1]
+        indices.append((
+            ts,
+            fd_pos,
+        ))
+    print('saving index to disk')
+    pickle.dump(indices, fdx)
+    fd.close()
+    fdx.close()
+
+def rebuild_index(path):
+    """Rebuilds the index when new data has been appended.
+    
+    Read the existing index and use it to shorten the time to rebuild the
+    index for data appended. If the data was created new or data changed that
+    existed when the index was created then this function won't work correctly.
+    """
+    index_path = path + '.index2'
+    with open(index_path, 'rb') as fd:
+        indices = pickle.load(fd)
+    build_index(path, indices)
 
 def enumerate_channel(status_prefix, dtl_start, dtl_end):
-    def read_worker():
-        last_print = time.time()
-        z = 0
-        with open('s3radio248.pickle', 'rb') as fd:
-            fd.seek(0, 2)
-            msz = fd.tell()
-            fd.seek(0)
-            try:
-                while True:
-                    if time.time() - last_print > 5:
-                        last_print = time.time()
-                        scanned_percentage = fd.tell() / msz * 100.0
-                        print('[%s] %.2f' % (status_prefix, scanned_percentage))
-                    key, blob = pickle.load(fd)
-                    if dtl_start is not None and key[1] < dtl_start:
-                        continue
-                    if dtl_end is not None and key[1] > dtl_end:
-                        continue
-                    q.put(blob)
-                    z += 1
-                    #if z > 20:
-                    #    break
-            except EOFError:
-                pass        
-        q.put(None)
+    print(status_prefix)
 
-    #dtl = dt.datetime(2024, 5, 18, 14, 23, 0)
-    #dtl = dt.datetime(2024, 6, 25, 0, 0, 0)
-    #dtl = dtl.timestamp()
+    def generator_func(dtl_start, dtl_end):
+        if not os.path.exists('s3radio248.pickle.index2'):
+            build_index('s3radio248.pickle')
+
+        if os.stat('s3radio248.pickle').st_mtime > os.stat('s3radio248.pickle.index2').st_mtime:
+            rebuild_index('s3radio248.pickle')
+
+        with open('s3radio248.pickle.index2', 'rb') as fd:
+            indices = pickle.load(fd)
+
+        indices.sort(key=lambda item: item[0])
+        
+        lti = time.time()
+
+        with open('s3radio248.pickle', 'rb') as fd:
+            for ndx, (ts, fd_pos) in enumerate(indices):
+                if time.time() - lti > 5:
+                    lti = time.time()
+                    prog = ndx / (len(indices) - 1) * 100.0
+                    print('[%s] %.2f' % (status_prefix, prog))
+                if dtl_start is not None and ts < dtl_start:
+                    continue
+                if dtl_end is not None and ts > dtl_end:
+                    continue
+
+                fd.seek(fd_pos)
+                key, blob = pickle.load(fd)
+                yield blob
+
     if dtl_start is not None:
         dtl_start = dtl_start.timestamp()
     
     if dtl_end is not None:
         dtl_end = dtl_end.timestamp()
 
-    q = queue.Queue(25)
-
-    th = threading.Thread(
-        target=read_worker,
-        daemon=True
-    )
-    th.start()
-
-    while True:
-        blob = q.get()
-        if blob is None:
-            break
+    for blob in generator_func(dtl_start, dtl_end):
         for sample in blob:
             src_ndx = sample['src_ndx']
             if src_ndx != 0:
@@ -104,12 +146,13 @@ def build_mask():
     the attenuation/response and then calculates a sequence of coefficients to equalize the
     frequency response. This way channels can be compared with each other in terms of 
     magnitude.
+
+    The resulting mask can be multiplied by the channel whereby the channel.
     """
     s = None
     sc = 0
     st = time.time()
-    for _, c, _ in enumerate_channel():
-        #plt.plot(c)
+    for _, c, _ in enumerate_channel('building mask...'):
         if s is None:
             s = c
             sc = 1
@@ -135,6 +178,8 @@ def build_mask():
 
 
 def load_mask():
+    """Loads the spectral mask.
+    """
     with open('spectral-mask.pickle', 'rb') as fd:
         return pickle.load(fd)
 
@@ -208,6 +253,7 @@ def running_mean_plot():
 
 def sigma_plot(args):
     mask = load_mask()
+
     ts_least = None
     ts_most = None
     f_least = None
@@ -272,13 +318,6 @@ def sigma_plot(args):
         spc[f_pos, 0] += (c - mpc[f_pos]) ** 2
         spc[f_pos, 1] += 1.0
 
-        #for x in range(len(c)):
-        #    f = cf[x]
-        #    m = c[x]
-        #    
-        #    spc[f_pos, 0] += (m - mpc[f_pos]) ** 2
-        #    spc[f_pos, 1] += 1.0
-
     # std deviation per channel
     stdpc = np.sqrt(spc[:, 0] / spc[:, 1])
 
@@ -293,15 +332,21 @@ def sigma_plot(args):
         ts_pos = ts_pos.astype(np.uint32)
         f_pos = f_pos.astype(np.uint32)
         
-        #a = np.abs((c - mpc[f_pos]) / stdpc[f_pos])
-        
-        a = (c - mpc[f_pos]) / stdpc[f_pos]
+        if args.only_positive_sigma:
+            a = np.abs((c - mpc[f_pos]) / stdpc[f_pos])
+        else:
+            a = (c - mpc[f_pos]) / stdpc[f_pos]
 
         try:
-            sigma[f_pos, ts_pos] = np.max(
-                [a, sigma[f_pos, ts_pos]],
-                axis=0
-            )
+            if not args.only_positive_sigma:
+                for u in range(len(a)):
+                    if np.abs(a[u]) > np.abs(sigma[f_pos[u], ts_pos]):
+                        sigma[f_pos[u], ts_pos] = a[u]
+            else:
+                sigma[f_pos, ts_pos] = np.max(
+                    [a, sigma[f_pos, ts_pos]],
+                    axis=0
+                )
 
             m_energy[f_pos, ts_pos] = np.max(
                 [c, m_energy[f_pos, ts_pos]],
@@ -339,37 +384,14 @@ def main(args):
 
     time_period_marks = mdates.date2num(time_period_marks)
 
-    fig, ax = plt.subplots()
-
-    plt.title('Energy')
-    ax.set_ylabel('Frequency')
-    ax.set_xlabel('Time')
-    ax.xaxis_date()
-    ax.imshow(m_energy ** args.log, aspect='auto', extent=[time_period_marks[0], time_period_marks[-1], 6e9, 70e6])
-    plt.show()
-    plt.close()
-
-    fig, ax = plt.subplots()
-
-    if args.pat_x > 1 or args.pat_y > 1:
-        pat = np.ones(args.pat_x, sigma.dtype)
-        pat = np.tile(pat, args.pat_y).reshape((args.pat_y, args.pat_x))
-        sigma = signal.correlate2d(sigma, pat, mode='same')
-
-    plt.title('Sigma')
-    ax.set_ylabel('Frequency')
-    ax.set_xlabel('Time')
-    ax.xaxis_date()
-    ax.imshow(
-        sigma ** args.log,
-        extent=[time_period_marks[0], time_period_marks[-1], 6e9, 70e6],
-        aspect='auto'
-    )
-    plt.show()
-
-    #plt.plot(sigma[917, :])
-    #plt.show()
-
+    # def entry(args, m_energy, sigma, time_period_marks):
+    __import__('modules.' + args.module, fromlist=['modules']).entry({
+        'args': args,
+        'm_energy': m_energy, 
+        'sigma': sigma,
+        'time_period_marks': time_period_marks,
+    })
+        
 if __name__ == '__main__':
     ap = argparse.ArgumentParser(
         description='Displays graphics based on radio survey data.'
@@ -387,5 +409,7 @@ if __name__ == '__main__':
     ap.add_argument('--time-period-max-res', type=int, default=4096)
     ap.add_argument('--sigma-pickle', type=str, default='sigma.pickle')
     ap.add_argument('--energy-pickle', type=str, default='m_energy.pickle')
+    ap.add_argument('--only-positive-sigma', default=False, action=argparse.BooleanOptionalAction)
     ap.add_argument('--build', default=True, action=argparse.BooleanOptionalAction)
+    ap.add_argument('--module', type=str, required=True, choices=['humidity', 'energysigma'])
     main(ap.parse_args())
