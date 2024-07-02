@@ -38,7 +38,7 @@ def main(cred_path: str, bucket_name: str, data_path: str):
 
     total_bytes = 0
 
-    while True:    
+    while True:
         print('Fetching S3 index.')
 
         if start_after is None:
