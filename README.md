@@ -81,6 +81,10 @@ _If you didn't use `s3shuffle.py` then the data is saved locally and you can use
 
 I've included my own program for viewing the data. I've created a modules system for it so you can easily extend it for your own needs. I've included two examples: `humidity` and `energysigma`. The humidity module is some testing I was doing on measuring humidity levels and energysigma is a general case that shown work for almost any dataset.
 
+_You will want to include the option `--build-mask` if it is the first time running it. This will try to build a spectral mask using averages. It works well when scanning over a large swath of frequencies that are mostly noise._
+
+The spectral mask is used to compensate for the non-linear responsivity of the mixer output. It happens because the bandband is warped in magnitude such that frequencies near DC are attenuated more or less than frequencies near the edges.
+
 For example, `python Z:\nbfreqscan\view2.py --build --time-period-max-res 2048 --freq-res 16000 --log 1.0 --pat-y 100 --pat-x 1 --time-period 300 --start "6/28/24 00:00:00" --module energysigma`.
 
 The above uses a logarithmic scale of 1.0 (no log scale) for the sigma plot, has a start date and time, uses the module energysigma, uses a pattern convolution of 100 tall and 1 wide (averaging), has a time period of 300 seconds, the time period maximum bin count is 2048 and the frequency maximum bin count is 16000. 
