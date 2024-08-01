@@ -66,8 +66,8 @@ unless you use a seperate configuration file for the client.
 
 # Downloading from S3
 
-To download the channelized data from S3 use the `view_fetch_new.py`. You might call it, for example,
-like this: `python Z:\nbfreqscan\view_fetch_new.py --cred-path Z:\nbfreqscan\s3sak.txt --bucket-name radio248 --data-path .\s3radio248.pickle`.
+To download the channelized data from S3 use the `s3fetch.py`. You might call it, for example,
+like this: `python Z:\nbfreqscan\s3fetch.py --cred-path Z:\nbfreqscan\s3sak.txt --bucket-name radio248 --data-path .\s3radio248.pickle`.
 
 The `--cred-path` is a text file with two lines. The first line is the Amazon S3 `access key` and the second line is the `secret access key`. You can get these from your Amazon AWS account.
 
@@ -85,7 +85,9 @@ _You will want to include the option `--build-mask` if it is the first time runn
 
 The spectral mask is used to compensate for the non-linear responsivity of the mixer output. It happens because the bandband is warped in magnitude such that frequencies near DC are attenuated more or less than frequencies near the edges.
 
-For example, `python Z:\nbfreqscan\view2.py --build --time-period-max-res 2048 --freq-res 16000 --log 1.0 --pat-y 100 --pat-x 1 --time-period 300 --start "6/28/24 00:00:00" --module energysigma`.
+For example, `python Z:\nbfreqscan\view_local_store.py --build --time-period-max-res 2048 --freq-res 16000 --log 1.0 --pat-y 100 --pat-x 1 --time-period 300 --start "6/28/24 00:00:00" --module energysigma`.
+
+_I forgot to mention above to use the --data argument to specify the local data file that is created by the `s3fetch.py` program._
 
 The above uses a logarithmic scale of 1.0 (no log scale) for the sigma plot, has a start date and time, uses the module energysigma, uses a pattern convolution of 100 tall and 1 wide (averaging), has a time period of 300 seconds, the time period maximum bin count is 2048 and the frequency maximum bin count is 16000. 
 
