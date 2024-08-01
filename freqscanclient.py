@@ -51,7 +51,10 @@ def execute(config_path: str):
     print('reading')
     while True:
         for ndx, sock in enumerate(socks):
-            data = bsocket.recv_pickle(sock)
+            try:
+                data = bsocket.recv_pickle(sock)
+            except bsocket.SocketException:
+                continue
             yield data, socks_ndx[ndx]
 
 def main(config_path: str, data_output_path: str):

@@ -83,24 +83,25 @@ def rebuild_index(path):
         indices = pickle.load(fd)
     build_index(path, indices)
 
-def enumerate_channel(status_prefix, dtl_start, dtl_end):
+def enumerate_channel(data_path, status_prefix, dtl_start, dtl_end):
     print(status_prefix)
 
     def generator_func(dtl_start, dtl_end):
-        if not os.path.exists('s3radio248.pickle.index2'):
-            build_index('s3radio248.pickle')
+        index2_path = '%s.index2' % data_path
+        if not os.path.exists(index2_path):
+            build_index(data_path)
 
-        if os.stat('s3radio248.pickle').st_mtime > os.stat('s3radio248.pickle.index2').st_mtime:
-            rebuild_index('s3radio248.pickle')
+        if os.stat(data_path).st_mtime > os.stat(index2_path).st_mtime:
+            rebuild_index(data_path)
 
-        with open('s3radio248.pickle.index2', 'rb') as fd:
+        with open(index2_path, 'rb') as fd:
             indices = pickle.load(fd)
 
         indices.sort(key=lambda item: item[0])
         
         lti = time.time()
 
-        with open('s3radio248.pickle', 'rb') as fd:
+        with open(data_path, 'rb') as fd:
             for ndx, (ts, fd_pos) in enumerate(indices):
                 if time.time() - lti > 5:
                     lti = time.time()
@@ -139,7 +140,7 @@ def enumerate_channel(status_prefix, dtl_start, dtl_end):
                 yield ts, points, freqs
 
 
-def build_mask():
+def build_mask(args):
     """Writes out a spectral mask in the form of coeffients multiplied with each channel.
 
     The baseband output from the mixer is distorted and attenuated. This tries to estimate
@@ -149,10 +150,20 @@ def build_mask():
 
     The resulting mask can be multiplied by the channel whereby the channel.
     """
+    if args.start is not None:
+        args_start = dt.datetime.strptime(args.start, '%m/%d/%y %H:%M:%S')
+    else:
+        args_start = None
+    
+    if args.end is not None:
+        args_end = dt.datetime.strptime(args.end, '%m/%d/%y %H:%M:%S')
+    else:
+        args_end = None
+
     s = None
     sc = 0
     st = time.time()
-    for _, c, _ in enumerate_channel('building mask...'):
+    for _, c, _ in enumerate_channel(args.data, 'building mask...', args_start, args_end):
         if s is None:
             s = c
             sc = 1
@@ -183,74 +194,6 @@ def load_mask():
     with open('spectral-mask.pickle', 'rb') as fd:
         return pickle.load(fd)
 
-
-def all_time_spectrum_plot():
-    px = []
-    py = []
-
-    mask = load_mask()
-    for ts, c, f in enumerate_channel():
-        c *= mask
-        for x in range(len(c)):
-            px.append(f[x])
-            py.append(c[x])
-
-    plt.title('Spectrum Plot')
-    plt.xlabel('frequency')
-    plt.ylabel('magnitude')
-    plt.scatter(px, py, s=0.1)
-    plt.show()
-
-
-def running_mean_plot():
-    mask = load_mask()
-    ts_least = None
-    ts_most = None
-    f_least = None
-    f_most = None
-
-    print('Scanning data for bounds...')
-    for ts, c, f in enumerate_channel():
-        if ts_least is None or ts < ts_least:
-            ts_least = ts
-        if ts_most is None or ts > ts_most:
-            ts_most = ts
-        for x in range(len(c)):
-            if f_least is None or f[x] < f_least:
-                f_least = f[x]
-            if f_most is None or f[x] > f_most:
-                f_most = f[x]
-        size_c = len(c)
-
-    f_delta = f_most - f_least
-    ts_delta = ts_most - ts_least
-
-    #
-    freq_bins = 4096
-    time_period = 60 * 60
-    time_period_high_index = int((ts_most - ts_least) / time_period)
-    time_period_count = time_period_high_index + 1
-    period_resolution = min(time_period_count, 4096)
-
-    m3d = np.zeros((time_period_count, freq_bins, 2), np.float64)
-    
-    print('Accumulating energy...')
-    for ts, c, cf in enumerate_channel():
-        c *= mask
-        ts_pos = round((ts - ts_least) / ts_delta * (period_resolution - 1))
-        for x in range(len(c)):
-            f = cf[x]
-            m = c[x]
-            f_pos = round((f - f_least) / f_delta * (freq_bins - 1))
-            m3d[ts_pos, f_pos, 0] += m
-            m3d[ts_pos, f_pos, 1] += 1.0
-    
-    m3d = m3d[:, :, 0] / m3d[:, :, 1]
-
-    plt.imshow(m3d)
-    plt.show()
-
-
 def sigma_plot(args):
     mask = load_mask()
 
@@ -269,7 +212,7 @@ def sigma_plot(args):
     else:
         args_end = None
 
-    for ts, c, f in enumerate_channel('scanning data for bounds...', args_start, args_end):
+    for ts, c, f in enumerate_channel(args.data, 'scanning data for bounds...', args_start, args_end):
         if ts_least is None or ts < ts_least:
             ts_least = ts
         if ts_most is None or ts > ts_most:
@@ -297,7 +240,7 @@ def sigma_plot(args):
     # mean per channel
     mpc = np.zeros((freq_bins, 2), np.float64)
 
-    for ts, c, cf in enumerate_channel('calculating mean energy per channel...', args_start, args_end):
+    for ts, c, cf in enumerate_channel(args.data, 'calculating mean energy per channel...', args_start, args_end):
         #ts_pos = round((ts - ts_least) / ts_delta * (period_resolution - 1))
         c *= mask
         f_pos = np.round((cf - f_least) / f_delta * (freq_bins - 1))
@@ -310,7 +253,7 @@ def sigma_plot(args):
     # sum per channel
     spc = np.zeros((freq_bins, 2), np.float64)
 
-    for ts, c, cf in enumerate_channel('calculating standard deviation per channel...', args_start, args_end):
+    for ts, c, cf in enumerate_channel(args.data, 'calculating standard deviation per channel...', args_start, args_end):
         #ts_pos = round((ts - ts_least) / ts_delta * (period_resolution - 1))
         c *= mask
         f_pos = np.round((cf - f_least) / f_delta * (freq_bins - 1))
@@ -324,7 +267,7 @@ def sigma_plot(args):
     sigma = np.zeros((freq_bins, period_resolution), np.float64)
     m_energy = np.zeros((freq_bins, period_resolution), np.float64)
 
-    for ts, c, cf in enumerate_channel('calculating sigma per channel...', args_start, args_end):
+    for ts, c, cf in enumerate_channel(args.data, 'calculating sigma per channel...', args_start, args_end):
         c *= mask
 
         ts_pos = np.round((ts - ts_least) / ts_delta * (period_resolution - 1))
@@ -368,7 +311,7 @@ def sigma_plot(args):
 def main(args):
     if args.build_mask:
         print('building channel spectral mask')
-        build_mask()
+        build_mask(args)
 
     if args.build:
         sigma_plot(args)

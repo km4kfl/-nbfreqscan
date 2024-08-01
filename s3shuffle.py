@@ -75,6 +75,9 @@ def main():
         oldest = None
 
         print('building package', time.time())
+
+        ist = time.time()
+
         for data, src_ndx in source:
             ts = data['time']
 
@@ -87,6 +90,11 @@ def main():
                 'data': data,
                 'src_ndx': src_ndx,
             }, pkg)
+
+            if time.time() - ist > 3:
+                ist = time.time()
+                prog = pkg.tell() / (1024 * 1024 * 4) * 100.0
+                print('package progress: %.02f' % prog)
 
             if pkg.tell() > 1024 * 1024 * 4:
                 break
